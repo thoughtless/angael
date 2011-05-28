@@ -1,6 +1,8 @@
 # Angael
 
 Angael is a lightweight library for running repetitive background processes.
+It handles the forking and signal catching, allow you to just define what the
+background workers should do.
 
 ## Documentation
 

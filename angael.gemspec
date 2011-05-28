@@ -10,7 +10,7 @@ Gem::Specification.new do |s|
   s.email       = ["paul@thoughtless.ca"]
   s.homepage    = "http://github.com/thoughtless/angael"
   s.summary     = %q{Lightweight library for running repetitive background processes.}
-  #s.description = %q{TODO: Write a gem description}
+  s.description = %q{Angael is a lightweight library for running repetitive background processes. It handles the forking and signal catching, allow you to just define what the background workers should do.}
 
   s.rubyforge_project = "angael"
 
