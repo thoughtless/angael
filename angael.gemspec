@@ -20,7 +20,5 @@ Gem::Specification.new do |s|
   s.require_paths = ["lib"]
 
   s.add_development_dependency('rspec', '2.6.0')
-  # TODO: uncomment this (and remove the corresponding entry in Gemfile) once
-  #       this has been published on rubygems.org.
-  #s.add_development_dependency('rspec-process-mocks')
+  s.add_development_dependency('rspec-process-mocks')
 end
