@@ -11,54 +11,25 @@ module Angael
   #                  to do wrap the child process in a block. This is useful for
   #                  exception handling. Be sure to actually fork or you may break
   #                  something important.
+  #    #log        - If defined, this will be called at various points of interest
+  #                  with 1 String as the argument. Log levels are not supported.
+  #    #timeout    - Number of seconds to wait for the child process to exit after
+  #                  it is sent SIGINT. If you don't define this method, it waits
+  #                  60 seconds.
   module Worker
     class ChildProcessNotStoppedError < StandardError; end
 
     attr_reader :pid
 
-    # Options:
-    #   :batch_timeout - After this number of seconds, other workers will be able
-    #                    to work on the jobs reserved by #process_jobs.
-    #   :batch_timeout_buffer - This is the number of seconds between when the
-    #                           worker stops processing jobs and when other workers
-    #                           can start processing the jobs that this worker had
-    #                           resered. This should be set to the maximum length
-    #                           of time a single job should take, plus the maximum
-    #                           expected discrepancy between the system clocks on
-    #                           all the worker servers.
-    #   :logger => A logger object, which should follow the Logger class in the
-    #     standard library. Default nil, as in no logging.
-    #   :log_level => The log level, as defined by the Logger class in the
-    #     standard library. One of:
-    #       Logger::FATAL
-    #       Logger::ERROR
-    #       Logger::WARN
-    #       Logger::INFO  # Default
-    #       Logger::DEBUG
-    def initialize(attrs={})
-      @timeout = attrs[:timeout] || 60 # Seconds
-      @batch_size = attrs[:batch_size] || 1
-      @batch_timeout = attrs[:batch_timeout] || @batch_size * 5 # Seconds
-      @batch_timeout_buffer = attrs[:batch_timeout_buffer] || 5 # Seconds
-      @logger = attrs[:logger]
-      if @logger
-        @log_level = attrs[:log_level] || begin
-          require 'logger' # Only require it if it is absolutely neccessary.
-          Logger::INFO
-        end
-      end
-    end
-
-
     # Loops forever, taking jobs off the queue. SIGINT will stop it after
     # allowing any jobs already taken from the queue to be processed.
     def start!
       trap("CHLD") do
-        log("trapped SIGCHLD. Child PID #{pid}.")
+        __log("trapped SIGCHLD. Child PID #{pid}.")
 
         # @stopping is set by #stop!. If it is true, then the child process was
         # expected to die. If it is false/nil, then this is unexpected.
-        log("Child process died unexpectedly") unless @stopping
+        __log("Child process died unexpectedly") unless @stopping
         # Reap the child process so that #started? will return false. But we can't
         # block because this may be called for a Worker when a different Worker's
         # child is the process that died.
@@ -66,27 +37,27 @@ module Angael
       end
 
       @pid = fork_child do
-        log("Started")
+        __log("Started")
 
         if respond_to?(:after_fork)
-          log("Running after fork callback")
+          __log("Running after fork callback")
           after_fork
-          log("Finished running after fork callback")
+          __log("Finished running after fork callback")
         end
 
         @interrupted = false
         trap("INT") do
-          log("SIGINT Received")
+          __log("SIGINT Received")
           @interrupted = true
         end
         trap("TERM") do
-          log("SIGTERM Received")
+          __log("SIGTERM Received")
           @interrupted = true
         end
 
         loop do
           if @interrupted
-            log("Child process exiting gracefully")
+            __log("Child process exiting gracefully")
             exit 0
           end
           work
@@ -96,7 +67,7 @@ module Angael
 
     def stop!
       unless started?
-        log("Called stop for worker with PID #{pid} but it is not started")
+        __log("Called stop for worker with PID #{pid} but it is not started")
         return false
       end
 
@@ -105,14 +76,14 @@ module Angael
       @stopping = true
 
       begin
-        log("Sending SIGINT to child process with pid #{pid}.")
-        Timeout::timeout(@timeout) do
+        __log("Sending SIGINT to child process with pid #{pid}.")
+        Timeout::timeout(timeout) do
           Process.kill('INT', pid)
           wait_for_child
         end
       rescue Timeout::Error
         begin
-          log("Child process with pid #{pid} did not stop with #@timeout seconds of SIGINT. Sending SIGKILL to child process.")
+          __log("Child process with pid #{pid} did not stop within #{timeout} seconds of SIGINT. Sending SIGKILL to child process.")
           # This only leaves 1 second for the SIGKILL to take effect. I don't
           # know if that is enough time (or maybe too much time).
           Timeout::timeout(1) do
@@ -122,7 +93,7 @@ module Angael
         rescue Timeout::Error
           if pid_running?
             msg = "Unable to kill child process with PID: #{pid}"
-            log(msg)
+            __log(msg)
             raise ChildProcessNotStoppedError, msg
           end
         end
@@ -148,8 +119,14 @@ module Angael
     end
 
 
-    def log(msg)
-      @logger.add(@log_level, "#{Time.now.utc} - #{self.class} (pid #{$$}): #{msg}") if @logger
+    def __log(msg)
+      log(msg) if respond_to?(:log)
+    end
+
+
+    # In seconds
+    def timeout
+      60
     end
 
 
@@ -166,7 +143,7 @@ module Angael
     # Will just return if the child process is not running.
     def wait_for_child(opts={})
       begin
-        log("Waiting for child with pid #{pid}.")
+        __log("Waiting for child with pid #{pid}.")
         if opts[:dont_block]
           # When this is called as the result of a SIGCHLD
           # we need to pass in Process::WNOHANG as the 2nd argument, otherwise when

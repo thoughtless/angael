@@ -101,7 +101,11 @@ describe Angael::Worker do
       end
 
       context "child process does die within the worker's timeout" do
-        subject { @worker ||= Angael::TestSupport::SampleWorker.new(:timeout => 2) }
+        subject do
+          worker = Angael::TestSupport::SampleWorker.new
+          worker.stub(:timeout => 2)
+          worker
+        end
         before do
           subject.stub(:work) { nil }
           subject.start!
@@ -129,7 +133,11 @@ describe Angael::Worker do
       end
 
       context "child process does not die within the worker's timeout" do
-        subject { @worker ||= Angael::TestSupport::SampleWorker.new(:timeout => 1) }
+        subject do
+          worker = Angael::TestSupport::SampleWorker.new
+          worker.stub(:timeout => 1)
+          worker
+        end
         before do
           subject.stub(:work) { sleep 1000 }
           subject.start!
