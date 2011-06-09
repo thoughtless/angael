@@ -56,14 +56,14 @@ module Angael
           end
         end
       end
+      trap("INT") do
+        stop!
+      end
+      trap("TERM") do
+        stop!
+      end
 
       loop do
-        trap("INT") do
-          stop!
-        end
-        trap("TERM") do
-          stop!
-        end
         sleep 1
       end
     end
