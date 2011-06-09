@@ -68,6 +68,13 @@ module Angael
       end
     end
 
+    # This only exists for the sake of testing. I need a way to stub the restart!
+    # but not the original start!
+    # Note: this method is not tested directly.
+    def restart!
+      start!
+    end
+
 
 
     #########
