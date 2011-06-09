@@ -24,17 +24,7 @@ module Angael
     # Loops forever, taking jobs off the queue. SIGINT will stop it after
     # allowing any jobs already taken from the queue to be processed.
     def start!
-      trap("CHLD") do
-        __log("trapped SIGCHLD. Child PID #{pid}.")
-
-        # @stopping is set by #stop!. If it is true, then the child process was
-        # expected to die. If it is false/nil, then this is unexpected.
-        __log("Child process died unexpectedly") unless @stopping
-        # Reap the child process so that #started? will return false. But we can't
-        # block because this may be called for a Worker when a different Worker's
-        # child is the process that died.
-        wait_for_child(:dont_block => true) if pid
-      end
+      @stopping = false
 
       @pid = fork_child do
         __log("Started")
@@ -71,8 +61,8 @@ module Angael
         return false
       end
 
-      # Some internal state so that other parts of our code know that we
-      # intentionally stopped the child process.
+      # This informs the Manager (through #stopping?) that we intentionally
+      # stopped the child process.
       @stopping = true
 
       begin
@@ -98,7 +88,6 @@ module Angael
           end
         end
       end
-      @stopping = false
     end
 
     def started?
@@ -106,6 +95,10 @@ module Angael
     end
     def stopped?
       !started?
+    end
+    # TODO: test this
+    def stopping?
+      @stopping
     end
 
     #########

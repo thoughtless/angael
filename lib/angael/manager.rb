@@ -43,6 +43,20 @@ module Angael
     def start!
       workers.each { |w| w.start! }
 
+      trap("CHLD") do
+        workers.each do |w|
+          result = wait(w.pid)
+#print w.pid.to_s
+#print "\t"
+#p result
+          if result
+            # worker terminated
+            # Restart it unless we asked it to stop.
+            w.restart! unless w.stopping?
+          end
+        end
+      end
+
       loop do
         trap("INT") do
           stop!
@@ -74,5 +88,19 @@ module Angael
       @logger.add(@log_level, "#{Time.now.utc} - #{self.class} (pid #{$$}): #{msg}") if @logger
     end
 
+    # Returns immediately. If the process is still running, it returns nil.
+    # If the process is a zombie, it returns an array with the pid as the
+    # first element and a Process::Status object as the 2nd element, i.e.
+    # it returns the same thing as Process.wait2. If the process does not
+    # exist (i.e. it is completely gone) then it returns an array with the
+    # pid as the first element and nil as the 2nd element (because there
+    # is no Process::Status object to return).
+    def wait(pid)
+      begin
+        Process.wait2(pid, Process::WNOHANG)
+      rescue Errno::ECHILD
+        [pid, nil] # It did exit, but we don't know the exit status.
+      end
+    end
   end
 end

@@ -26,6 +26,11 @@ describe Angael::Worker do
       subject.should be_started
     end
 
+    it "should not be stopping" do
+      subject.start!
+      subject.should_not be_stopping
+    end
+
     it "should be doing work" do
       # TODO: Update #should_receive_in_child_process to allow for a
       #       #more_than_once option, then use that instead of setting this all
@@ -63,6 +68,9 @@ describe Angael::Worker do
       it "should not be started" do
         Process.kill('KILL', subject.pid)
         sleep 0.1 # Wait for SIGKILL to take effect.
+        # We must clean up the zombies here because the Worker class noramlly
+        # relies on the worker manager to do that.
+        Process.wait2(subject.pid, Process::WNOHANG)
         subject.should_not be_started
       end
 
@@ -81,10 +89,15 @@ describe Angael::Worker do
     before { subject.stub(:work => nil) }
     after { subject.stop! }
 
-    context "is stopped" do
+    context "when stopped" do
       it "should return false" do
         subject.should_not be_started
         subject.stop!.should be_false
+      end
+
+      it "should not be stopping" do
+        subject.stop!
+        subject.should_not be_stopping
       end
 
       it "should not send a SIGINT to the child process" do
@@ -93,14 +106,20 @@ describe Angael::Worker do
       end
     end
 
-    context "is started" do
+    context "when started" do
       it "should send a SIGINT to the child process" do
         subject.start!
         should_receive_and_run(Process, :kill, 'INT', subject.pid)
         subject.stop!
       end
 
-      context "child process does die within the worker's timeout" do
+      it "should be stopping" do
+        subject.start!
+        subject.stop!
+        subject.should be_stopping
+      end
+
+      context "when child process does die within the worker's timeout" do
         subject do
           worker = Angael::TestSupport::SampleWorker.new
           worker.stub(:timeout => 2)
@@ -132,7 +151,7 @@ describe Angael::Worker do
         end
       end
 
-      context "child process does not die within the worker's timeout" do
+      context "when child process does not die within the worker's timeout" do
         subject do
           worker = Angael::TestSupport::SampleWorker.new
           worker.stub(:timeout => 1)
@@ -176,6 +195,9 @@ describe Angael::Worker do
             # Clean up
             Process._original_kill('KILL', subject.pid)
             sleep 0.1 # Wait for SIGKILL to take effect.
+            # We must clean up the zombies here because the Worker class noramlly
+            # relies on the worker manager to do that.
+            Process.wait2(subject.pid, Process::WNOHANG)
             pid_running?(subject.pid).should be_false
           end
 
@@ -215,31 +237,6 @@ describe Angael::Worker do
             Process.kill(sig, subject.pid)
             pid, status = Process.wait2(subject.pid)
             status.should == 0
-          end
-
-          it "should reap the child process" do
-            # As a general rule, I would only expect this method to be called
-            # once. However, signal behavior is difficult to predict. In some
-            # of our test runs, it is called more than once. If we do receive
-            # multiple SIGCHLD signals (which would be what causes this method
-            # to be called multiple times) there are no ill side effects. Thus
-            # I think it is quite safe to allow this method to be called more
-            # than once.
-            #   -- Paul Cortens (2011-05-18)
-            subject.should_receive(:wait_for_child).at_least(:once)
-
-            subject.start!
-            sleep 0.1 # Make sure there was enough time for the child process to start.
-            Process.kill(sig, subject.pid)
-
-            # We need to wait this long to make sure the child process had time
-            # to respond to the signal. If this is decreased to 'sleep 0.1' then
-            # the tests will sometimes fail because there wasn't enough time for
-            # the trap block to run #wait_for_child.
-            sleep 0.5
-
-            # Clean up zombie child processes.
-            Process.wait(subject.pid)
           end
         end
       end

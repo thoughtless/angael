@@ -20,7 +20,8 @@ describe Angael::Manager do
   end
 
   describe "#start!" do
-    subject { Angael::Manager.new(Angael::TestSupport::SampleWorker, 2) }
+    subject { Angael::Manager.new(Angael::TestSupport::SampleWorker, 3) }
+
     it "should start all its workers" do
       subject.workers.each do |w|
         w.should_receive_in_child_process(:start!)
@@ -38,6 +39,87 @@ describe Angael::Manager do
       Process.wait(pid)
     end
 
+    context "when it receives a SIGCHLD" do
+      after(:each) do
+        # Clean up
+        unless Process.wait2(@pid, Process::WNOHANG)
+          Process.kill('KILL', @pid) unless
+          Process.wait(@pid) rescue nil
+        end
+      end
+
+      context "when worker was asked to stop" do
+        it "should not restart the child process" do
+          subject.workers.each do |w|
+            w.stub(:work).and_return { sleep 0.1 }
+            w.should_receive_in_child_process(:restart!).exactly(0).times
+          end
+
+          @pid = Process.fork do
+            subject.start!
+          end
+
+          sleep 0.1 # Give the process a chance to start.
+          # This sends stop! to all the workers.
+          Process.kill('INT', @pid)
+          sleep 0.1 # Give the TempFile a chance to flush
+        end
+
+        it "should reap the child processes" do
+          subject.workers.each do |w|
+            w.stub(:work).and_return { sleep 0.05 }
+          end
+
+          # We need access to the worker objects to get their PIDs, so we
+          # fork a process which will send SIGINT to this current process.
+          # Then we start the Manager in this process and wait for it to
+          # get the SIGINT. Finally we rescue SystemExit so that this
+          # process doesn't exit with the Manager stops.
+          current_pid = $$
+          @pid = Process.fork do
+            sleep 0.1 # Give the process a chance to start.
+            Process.kill('INT', current_pid)
+            exit 0
+          end
+          begin
+            subject.start!
+          rescue SystemExit
+            nil
+          end
+
+          subject.workers.each do |w|
+            lambda do
+              Process.kill(0, w.pid)
+            end.should raise_error(Errno::ESRCH, "No such process")
+          end
+        end
+      end
+
+      context "when worker was not asked to stop" do
+        after(:each) do
+          # Clean up
+          Process.kill('INT', @pid)
+          sleep 0.1
+        end
+        it "should restart the child process" do
+          subject.workers.each do |w|
+            w.stub(:work).and_return do
+              sleep 0.05
+              # This is like exiting with an exception, but it prevents the ugly
+              # stacktrace.
+              exit 1
+            end
+            w.should_receive_in_child_process(:restart!).at_least(1).times
+          end
+
+          @pid = Process.fork do
+            subject.start!
+          end
+
+          sleep 0.1 # Give the process a chance to start.
+        end
+      end
+    end
 
     %w(INT TERM).each do |sig|
       context "when it receives a SIG#{sig}" do
