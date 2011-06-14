@@ -68,14 +68,16 @@ module Angael
         stop!
       end
 
-      loop do
-        if @restart_after
+      if @restart_after
+        loop do
           # Periodically restart workers, 1 at a time.
           sleep @restart_after
           w = next_worker_to_restart
           w.stop!
           w.start!
-        else
+        end
+      else
+        loop do
           # Don't restart workers if nothing is wrong.
           sleep 1
         end
