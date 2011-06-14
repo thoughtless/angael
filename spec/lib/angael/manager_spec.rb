@@ -41,7 +41,7 @@ describe Angael::Manager do
 
     context "when :restart_after is set to 0.5" do
       subject { Angael::Manager.new(Angael::TestSupport::SampleWorker, 3, [], :restart_after => 0.5) }
-      it "should restarts workers 1 at a time, at 1 second intervals" do
+      it "should restart workers 1 at a time, at 1 second intervals" do
         subject.workers.each do |w|
           w.stub(:start!) # We don't actually need the workers to fork.
         end

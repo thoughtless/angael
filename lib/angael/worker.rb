@@ -55,6 +55,15 @@ module Angael
       end
     end
 
+    # This only exists for the sake of testing. I need a way to stub the restart!
+    # but not the original start!
+    # Note: this method is not tested directly.
+    # Users of this library should not call this method or depend on its existence
+    # or behavior.
+    def restart!
+      start!
+    end
+
     def stop!
       unless started?
         __log("Called stop for worker with PID #{pid} but it is not started")
