@@ -39,13 +39,47 @@ describe Angael::Manager do
       Process.wait(pid)
     end
 
+    context "when :restart_after is set to 0.5" do
+      subject { Angael::Manager.new(Angael::TestSupport::SampleWorker, 3, [], :restart_after => 0.5) }
+      it "should restarts workers 1 at a time, at 1 second intervals" do
+        subject.workers.each do |w|
+          w.stub(:start!) # We don't actually need the workers to fork.
+        end
+
+        subject.workers[0].should_receive(:stop!).exactly(1).times
+        subject.workers[1].should_receive(:stop!).exactly(2).times # This is the worker that got restarted.
+        subject.workers[2].should_receive(:stop!).exactly(1).times
+
+        subject.workers[0].should_receive(:start!).exactly(1).times
+        subject.workers[1].should_receive(:start!).exactly(2).times # This is the worker that got restarted.
+        subject.workers[2].should_receive(:start!).exactly(1).times
+
+
+        # As an alternative to should_receive_in_child_process, we
+        # fork a process which will send SIGINT to this current process.
+        # Then we start the Manager in this process and wait for it to
+        # get the SIGINT. Finally we rescue SystemExit so that this
+        # process doesn't exit with the Manager stops.
+        # TODO: Be consistent in my use of this technique vs. should_receive_in_child_process.
+        current_pid = $$
+        pid = Process.fork do
+          sleep 0.6 # Add a 0.1 second buffer to the value of :restart_after to give the process a chance to start.
+          Process.kill('INT', current_pid)
+          exit 0
+        end
+        begin
+          subject.start!
+        rescue SystemExit
+          nil
+        end
+
+        clean_up_pid(pid)
+      end
+    end
+
     context "when it receives a SIGCHLD" do
       after(:each) do
-        # Clean up
-        unless Process.wait2(@pid, Process::WNOHANG)
-          Process.kill('KILL', @pid) unless
-          Process.wait(@pid) rescue nil
-        end
+        clean_up_pid(@pid)
       end
 
       context "when worker was asked to stop" do
@@ -141,6 +175,13 @@ describe Angael::Manager do
           Process.wait(pid)
         end
       end
+    end
+  end
+
+  def clean_up_pid(pid)
+    unless Process.wait2(pid, Process::WNOHANG)
+      Process.kill('KILL', pid) unless
+      Process.wait(pid) rescue nil
     end
   end
 end

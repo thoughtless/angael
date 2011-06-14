@@ -25,9 +25,14 @@ module Angael
     #       Logger::WARN
     #       Logger::INFO  # Default
     #       Logger::DEBUG
+    #   :restart_after => If set, 1 worker will be restarted after this number
+    #     of seconds. If it is nil (the default), then workers will not get
+    #     restarted for no reason. If your workers leak memory, this can help
+    #     reduce the problem. A graceful restart is always attempted.
     def initialize(worker_class, worker_count=1, worker_args=[], opts={})
       @workers = []
       worker_count.times { workers << worker_class.new(*worker_args) }
+      @restart_after = opts[:restart_after]
       @logger = opts[:logger]
       if @logger
         @log_level = opts[:log_level] || begin
@@ -64,7 +69,16 @@ module Angael
       end
 
       loop do
-        sleep 1
+        if @restart_after
+          # Periodically restart workers, 1 at a time.
+          sleep @restart_after
+          w = next_worker_to_restart
+          w.stop!
+          w.start!
+        else
+          # Don't restart workers if nothing is wrong.
+          sleep 1
+        end
       end
     end
 
@@ -109,5 +123,15 @@ module Angael
         [pid, nil] # It did exit, but we don't know the exit status.
       end
     end
+
+    def next_worker_to_restart
+      @worker_count ||= workers.size
+      @next_worker_to_restart_index ||= 0
+      @next_worker_to_restart_index += 1
+      @next_worker_to_restart_index %= @worker_count
+
+      workers[@next_worker_to_restart_index]
+    end
+
   end
 end
