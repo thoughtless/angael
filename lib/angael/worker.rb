@@ -146,16 +146,7 @@ module Angael
     def wait_for_child(opts={})
       begin
         __log("Waiting for child with pid #{pid}.")
-        if opts[:dont_block]
-          # When this is called as the result of a SIGCHLD
-          # we need to pass in Process::WNOHANG as the 2nd argument, otherwise when
-          # there are multiple workers, some workers will trap SIGCHLD when other
-          # workers' child processes die. Without this argument, those workers will
-          # hang forever, which also hangs the worker manager.
-          Process.wait(pid, Process::WNOHANG)
-        else
-          Process.wait(pid)
-        end
+        Process.wait(pid)
       rescue Errno::ECHILD
         # The child process has already been reaped.
       end
