@@ -76,6 +76,8 @@ module Angael
 
       begin
         __log("Sending SIGINT to child process with pid #{pid}.")
+        # TODO: Don't use Timeout::timeout. Use the wait like in worker manager (i.e. non-blocking)
+        #       and do a loop with a sleep. After each sleep, send another SIGINT.
         Timeout::timeout(timeout) do
           Process.kill('INT', pid)
           wait_for_child
@@ -85,6 +87,8 @@ module Angael
           __log("Child process with pid #{pid} did not stop within #{timeout} seconds of SIGINT. Sending SIGKILL to child process.")
           # This only leaves 1 second for the SIGKILL to take effect. I don't
           # know if that is enough time (or maybe too much time).
+          # TODO: Don't use Timeout::timeout. Use the wait like in worker manager (i.e. non-blocking)
+          #       and do a loop with a sleep. After each sleep, send another SIGKILL.
           Timeout::timeout(1) do
             Process.kill('KILL', pid)
             wait_for_child

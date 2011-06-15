@@ -92,6 +92,20 @@ module Angael
 
     def stop!
       log("SIGINT Received")
+      # TODO: This does the workers 1 at a time. We don't send the SIGINT to
+      #       worker 2 until worker 1 has fully stopped.
+      #       We need to call w.stop! inside a Thread. 1 Thread per worker.
+      #       Once we have called w.stop! for every worker, then we can join
+      #       all the the threads back in. That ensures that any errors are
+      #       still raised in the main manager thread/process. But it should
+      #       reduce the overall time spent waiting for child processes to
+      #       exit because the waiting for each child process can happen in
+      #       parallel.
+      #       Another option (which may be easier to manage because it doesn't
+      #       include threads) is to split out Worker#stop! from Worker#wait_for_stop!.
+      #       The former would just set @stopping to true and send the first SIGINT.
+      #       The latter would do the waiting/looping (and possibly send additional
+      #       SIGINTs/SIGKILLs).
       workers.each { |w|
         log("Calling #stop! for worker #{w.inspect}")
         w.stop!
