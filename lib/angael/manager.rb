@@ -79,6 +79,7 @@ module Angael
           log("Worker has been stopped: #{w.inspect}")
           w.start!
           log("Worker has been restarted: #{w.inspect}")
+          w = nil
         end
       else
         loop do
