@@ -71,10 +71,14 @@ module Angael
       if @restart_after
         loop do
           # Periodically restart workers, 1 at a time.
+          log("Sleeping for #@restart_after seconds")
           sleep @restart_after
           w = next_worker_to_restart
+          log("To restart a worker: Calling #stop! for worker #{w.inspect}")
           w.stop!
+          log("Worker has been stopped: #{w.inspect}")
           w.start!
+          log("Worker has been restarted: #{w.inspect}")
         end
       else
         loop do
