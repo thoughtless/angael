@@ -1,4 +1,4 @@
-require 'timeout'
+require 'angael/process_helper'
 module Angael
   # Usage
   #     include Angael::Worker
@@ -17,6 +17,7 @@ module Angael
   #                  it is sent SIGINT. If you don't define this method, it waits
   #                  60 seconds.
   module Worker
+    include ProcessHelper
     class ChildProcessNotStoppedError < StandardError; end
 
     attr_reader :pid
@@ -74,32 +75,29 @@ module Angael
       # stopped the child process.
       @stopping = true
 
-      begin
-        __log("Sending SIGINT to child process with pid #{pid}.")
-        # TODO: Don't use Timeout::timeout. Use the wait like in worker manager (i.e. non-blocking)
-        #       and do a loop with a sleep. After each sleep, send another SIGINT.
-        Timeout::timeout(timeout) do
-          Process.kill('INT', pid)
-          wait_for_child
-        end
-      rescue Timeout::Error
-        begin
-          __log("Child process with pid #{pid} did not stop within #{timeout} seconds of SIGINT. Sending SIGKILL to child process.")
-          # This only leaves 1 second for the SIGKILL to take effect. I don't
-          # know if that is enough time (or maybe too much time).
-          # TODO: Don't use Timeout::timeout. Use the wait like in worker manager (i.e. non-blocking)
-          #       and do a loop with a sleep. After each sleep, send another SIGKILL.
-          Timeout::timeout(1) do
-            Process.kill('KILL', pid)
-            wait_for_child
-          end
-        rescue Timeout::Error
-          if pid_running?
-            msg = "Unable to kill child process with PID: #{pid}"
-            __log(msg)
-            raise ChildProcessNotStoppedError, msg
-          end
-        end
+      counter = 0
+      child_has_exited = nil # When this is not nil we know the child process has stopped and been reaped.
+
+      while !child_has_exited && counter < timeout
+        __log("Sending SIGINT to child process with pid #{pid}. Attempt Count: #{counter + 1}.")
+        send_signal('INT', pid)
+        sleep 1
+        counter += 1
+        child_has_exited = exit_status(pid)
+      end
+
+      unless child_has_exited
+        __log("Child process with pid #{pid} did not stop within #{timeout} seconds of SIGINT. Sending SIGKILL to child process.")
+        send_signal('KILL', pid)
+        sleep 1
+        child_has_exited = exit_status(pid)
+      end
+
+      unless child_has_exited
+        # SIGKILL didn't work.
+        msg = "Unable to kill child process with PID: #{pid}"
+        __log(msg)
+        raise ChildProcessNotStoppedError, msg
       end
     end
 

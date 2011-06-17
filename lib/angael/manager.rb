@@ -1,9 +1,11 @@
+require 'angael/process_helper'
 module Angael
   # A Manager has a number of of worker objects. Starting the Manager simply
   # calls #start! on each worker, then it goes into an infinite loop, waiting
   # for SIGINT or SIGTERM. When either of those is received, the manager will
   # call #stop! on each Worker.
   class Manager
+    include ProcessHelper
     attr_reader :workers
 
     # Creates a new manager.
@@ -50,7 +52,7 @@ module Angael
 
       trap("CHLD") do
         workers.each do |w|
-          result = wait(w.pid)
+          result = exit_status(w.pid)
 #print w.pid.to_s
 #print "\t"
 #p result
@@ -74,7 +76,7 @@ module Angael
           log("Sleeping for #@restart_after seconds")
           sleep @restart_after
           w = next_worker_to_restart
-          log("To restart a worker: Calling #stop! for worker #{w.inspect}")
+          log("Time to restart a worker: Calling #stop! for worker #{w.inspect}")
           w.stop!
           log("Worker has been stopped: #{w.inspect}")
           w.start!
@@ -123,20 +125,6 @@ module Angael
       @logger.add(@log_level, "#{Time.now.utc} - #{self.class} (pid #{$$}): #{msg}") if @logger
     end
 
-    # Returns immediately. If the process is still running, it returns nil.
-    # If the process is a zombie, it returns an array with the pid as the
-    # first element and a Process::Status object as the 2nd element, i.e.
-    # it returns the same thing as Process.wait2. If the process does not
-    # exist (i.e. it is completely gone) then it returns an array with the
-    # pid as the first element and nil as the 2nd element (because there
-    # is no Process::Status object to return).
-    def wait(pid)
-      begin
-        Process.wait2(pid, Process::WNOHANG)
-      rescue Errno::ECHILD
-        [pid, nil] # It did exit, but we don't know the exit status.
-      end
-    end
 
     def next_worker_to_restart
       @worker_count ||= workers.size
