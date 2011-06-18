@@ -46,9 +46,9 @@ describe Angael::Manager do
           w.stub(:start!) # We don't actually need the workers to fork.
         end
 
-        subject.workers[0].should_receive(:stop!).exactly(1).times
-        subject.workers[1].should_receive(:stop!).exactly(2).times # This is the worker that got restarted.
-        subject.workers[2].should_receive(:stop!).exactly(1).times
+        subject.workers[0].should_receive(:stop_with_wait).exactly(1).times
+        subject.workers[1].should_receive(:stop_with_wait).exactly(2).times # This is the worker that got restarted.
+        subject.workers[2].should_receive(:stop_with_wait).exactly(1).times
 
         subject.workers[0].should_receive(:start!).exactly(1).times
         subject.workers[1].should_receive(:start!).exactly(2).times # This is the worker that got restarted.
@@ -94,7 +94,7 @@ describe Angael::Manager do
           end
 
           sleep 0.1 # Give the process a chance to start.
-          # This sends stop! to all the workers.
+          # This sends stop_with_wait to all the workers.
           Process.kill('INT', @pid)
           sleep 0.1 # Give the TempFile a chance to flush
         end
@@ -157,11 +157,11 @@ describe Angael::Manager do
 
     %w(INT TERM).each do |sig|
       context "when it receives a SIG#{sig}" do
-        it "should call #stop! on each Worker" do
+        it "should call #stop_with_wait on each Worker" do
           subject.workers.each do |w|
             w.stub(:start!) # We don't care about the sub-process, so don't start it.
 
-            w.should_receive_in_child_process(:stop!)
+            w.should_receive_in_child_process(:stop_with_wait)
           end
 
           pid = Process.fork do

@@ -65,9 +65,13 @@ module Angael
       start!
     end
 
-    def stop!
+    # Returns true if SIGINT was sent to the child process, even if the child
+    # process does not exists.
+    # Returns false if started? is true.
+    # Sets stopping? to false.
+    def stop_without_wait
       unless started?
-        __log("Called stop for worker with PID #{pid} but it is not started")
+        __log("Tried to stop worker with PID #{pid} but it is not started")
         return false
       end
 
@@ -75,25 +79,34 @@ module Angael
       # stopped the child process.
       @stopping = true
 
-      counter = 0
-      child_has_exited = nil # When this is not nil we know the child process has stopped and been reaped.
+      __log("Sending SIGINT to child process with pid #{pid}.")
+      send_signal('INT', pid)
+      true
+    end
 
-      while !child_has_exited && counter < timeout
-        __log("Sending SIGINT to child process with pid #{pid}. Attempt Count: #{counter + 1}.")
-        send_signal('INT', pid)
+    # Keeps sending SIGINT until the child process exits. If #timeout seconds
+    # pass, then it sends 1 SIGKILL. If that also fails, it raises ChildProcessNotStoppedError.
+    def stop_with_wait
+      return false unless stop_without_wait
+
+      __log("Waiting for child process with pid #{pid} to stop.")
+
+      counter = 0
+
+      while pid_running? && counter < timeout
         sleep 1
         counter += 1
-        child_has_exited = exit_status(pid)
+        __log("Sending SIGINT to child process with pid #{pid}. Attempt Count: #{counter}.")
+        send_signal('INT', pid)
       end
 
-      unless child_has_exited
+      if pid_running?
         __log("Child process with pid #{pid} did not stop within #{timeout} seconds of SIGINT. Sending SIGKILL to child process.")
         send_signal('KILL', pid)
         sleep 1
-        child_has_exited = exit_status(pid)
       end
 
-      unless child_has_exited
+      if pid_running?
         # SIGKILL didn't work.
         msg = "Unable to kill child process with PID: #{pid}"
         __log(msg)
@@ -134,25 +147,10 @@ module Angael
     end
 
 
-    # Note: if the pid is running, but this process doesn't have permissions to
-    #       access it, then this will return false.
     def pid_running?
-      begin
-        Process.kill(0, pid) == 1
-      rescue Errno::ESRCH, Errno::EPERM
-        false
-      end
+      !exit_status(pid)
     end
 
-    # Will just return if the child process is not running.
-    def wait_for_child(opts={})
-      begin
-        __log("Waiting for child with pid #{pid}.")
-        Process.wait(pid)
-      rescue Errno::ECHILD
-        # The child process has already been reaped.
-      end
-    end
 
     # This is the standard/default way of doing it. Overwrite this if you want
     # to wrap it in an exception handler, for example.

@@ -7,7 +7,7 @@ describe Angael::Worker do
 
   describe "#start!" do
     before { subject.stub(:work => nil) }
-    after { subject.stop! if subject.started? }
+    after { subject.stop_with_wait if subject.started? }
 
     it "should set #pid" do
       subject.pid.should be_nil
@@ -85,24 +85,24 @@ describe Angael::Worker do
 
 
 
-  describe "#stop!" do
+  describe "#stop_with_wait!" do
     before { subject.stub(:work => nil) }
-    after { subject.stop! }
+    after { subject.stop_with_wait }
 
     context "when stopped" do
       it "should return false" do
         subject.should_not be_started
-        subject.stop!.should be_false
+        subject.stop_with_wait.should be_false
       end
 
       it "should not be stopping" do
-        subject.stop!
+        subject.stop_with_wait
         subject.should_not be_stopping
       end
 
       it "should not send a SIGINT to the child process" do
         should_not_receive_and_run(Process, :kill, 'INT', subject.pid)
-        subject.stop!
+        subject.stop_with_wait
       end
     end
 
@@ -110,12 +110,12 @@ describe Angael::Worker do
       it "should send a SIGINT to the child process" do
         subject.start!
         should_receive_and_run(Process, :kill, 'INT', subject.pid)
-        subject.stop!
+        subject.stop_with_wait
       end
 
       it "should be stopping" do
         subject.start!
-        subject.stop!
+        subject.stop_with_wait
         subject.should be_stopping
       end
 
@@ -130,23 +130,23 @@ describe Angael::Worker do
           subject.start!
         end
         it "should be stopped" do
-          subject.stop!
+          subject.stop_with_wait
           subject.should be_stopped
         end
 
         it "should not have a child process with the pid #pid" do
-          subject.stop!
+          subject.stop_with_wait
           pid_running?(subject.pid).should be_false
         end
 
         it "should not send a SIGKILL to the child process" do
           should_not_receive_and_run(Process, :kill, 'KILL', subject.pid)
-          subject.stop!
+          subject.stop_with_wait
         end
 
         it "should have the (now dead) child process' PID as #pid" do
           pid = subject.pid
-          subject.stop!
+          subject.stop_with_wait
           subject.pid.should == pid
         end
       end
@@ -164,18 +164,18 @@ describe Angael::Worker do
         end
 
         it "should be stopped" do
-          subject.stop!
+          subject.stop_with_wait
           subject.should be_stopped
         end
 
         it "should not have a child process with the pid #pid" do
-          subject.stop!
+          subject.stop_with_wait
           pid_running?(subject.pid).should be_false
         end
 
         it "should send a SIGKILL to the child process" do
           should_receive_and_run(Process, :kill, 'KILL', subject.pid)
-          subject.stop!
+          subject.stop_with_wait
         end
 
         context "child process does not die after receiving SIGKILL" do
@@ -204,7 +204,7 @@ describe Angael::Worker do
           it "should raise an error with the child process' pid in the message" do
             pid_running?(subject.pid).should be_true
             lambda do
-              subject.stop!
+              subject.stop_with_wait
             end.should raise_error(Angael::Worker::ChildProcessNotStoppedError, /#{subject.pid}/)
 
             # Confirm the PID is still running

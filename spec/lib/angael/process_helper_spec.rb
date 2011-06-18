@@ -11,6 +11,13 @@ describe Angael::ProcessHelper do
       end
     end
 
+    context "when Process.kill raises Errno::EPERM" do
+      before { Process.stub(:kill) { raise Errno::EPERM } }
+      it "should return an array of [pid, nil]" do
+        exit_status(123456).should == [123456, nil]
+      end
+    end
+
     context "when Process.kill return 1" do
       before { Process.stub(:kill).and_return(1) }
 

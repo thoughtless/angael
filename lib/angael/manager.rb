@@ -3,7 +3,7 @@ module Angael
   # A Manager has a number of of worker objects. Starting the Manager simply
   # calls #start! on each worker, then it goes into an infinite loop, waiting
   # for SIGINT or SIGTERM. When either of those is received, the manager will
-  # call #stop! on each Worker.
+  # call #stop_with_wait on each Worker.
   class Manager
     include ProcessHelper
     attr_reader :workers
@@ -11,7 +11,7 @@ module Angael
     # Creates a new manager.
     #
     # @worker_class [Class] The class to use for the workers. Must respond
-    #   to #new, #start!, and #stop!
+    #   to #new, #start!, and #stop_with_wait
     # @worker_count [Integer] The number of workers to manager. Default is 1.
     # @worker_args [Array] An array of arguments that will be passed to
     #   worker_class.new. The arguments will be splatted
@@ -46,7 +46,7 @@ module Angael
 
 
     # Starts workers by calling Worker#start! Loops forever waiting for SIGINT
-    # or SIGTERM, at which time it calls Worker#stop! on each worker.
+    # or SIGTERM, at which time it calls Worker#stop_with_wait on each worker.
     def start!
       workers.each { |w| w.start! }
 
@@ -76,8 +76,8 @@ module Angael
           log("Sleeping for #@restart_after seconds")
           sleep @restart_after
           w = next_worker_to_restart
-          log("Time to restart a worker: Calling #stop! for worker #{w.inspect}")
-          w.stop!
+          log("Time to restart a worker: Calling #stop_with_wait for worker #{w.inspect}")
+          w.stop_with_wait
           log("Worker has been stopped: #{w.inspect}")
           w.start!
           log("Worker has been restarted: #{w.inspect}")
@@ -114,9 +114,9 @@ module Angael
       #       The latter would do the waiting/looping (and possibly send additional
       #       SIGINTs/SIGKILLs).
       workers.each { |w|
-        log("Calling #stop! for worker #{w.inspect}")
-        w.stop!
-        log("Finished call to #stop! for worker #{w.inspect}")
+        log("Calling #stop_with_wait for worker #{w.inspect}")
+        w.stop_with_wait
+        log("Finished call to #stop_with_wait for worker #{w.inspect}")
       }
       exit 0
     end
