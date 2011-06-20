@@ -32,6 +32,8 @@ module Angael
       @pid = fork_child do
         __info("Started")
 
+        @pid = $$
+
         if respond_to?(:after_fork)
           __debug("Running after fork callback")
           after_fork
@@ -132,6 +134,12 @@ module Angael
     def stopping?
       @stopping
     end
+
+    def inspect
+      "#<JobWorker:#{object_id} @pid=#{pid}>"
+    end
+
+
 
     #########
     private #
