@@ -143,7 +143,8 @@ describe Angael::Manager do
             subject.start!
           end
 
-          sleep 0.1 # Give the process a chance to start.
+          # The main loop only checks every 1 second for a SIGCHLD signal.
+          sleep 1.1
         end
       end
     end

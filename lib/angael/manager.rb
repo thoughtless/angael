@@ -5,6 +5,7 @@ module Angael
   # for SIGINT or SIGTERM. When either of those is received, the manager will
   # call #stop_with_wait on each Worker.
   class Manager
+    LOOP_SLEEP_SECONDS = 1
     include ProcessHelper
     attr_reader :workers
 
@@ -53,17 +54,8 @@ module Angael
       workers.each { |w| w.start! }
 
       trap("CHLD") do
-        workers.each do |w|
-          result = exit_status(w.pid)
-#print w.pid.to_s
-#print "\t"
-#p result
-          if result
-            # worker terminated
-            # Restart it unless we asked it to stop.
-            w.restart! unless w.stopping?
-          end
-        end
+        log("SIGCHLD Received")
+        @sigchld = true
       end
       trap("INT") do
         log("SIGINT Received")
@@ -75,32 +67,17 @@ module Angael
       end
 
       if @restart_after
-        restart_after_counter = @restart_after
         loop do
-          stop! if @interrupted
-
-          # This ensures we are checking @interrupted every 1 second, but we
-          # can set @restart_after to something greater than zero.
-          if restart_after_counter > 0
-            sleep 1
-            restart_after_counter -= 1
-          else
-            # Periodically restart workers, 1 at a time.
-            log("Sleeping for #@restart_after seconds")
-            w = next_worker_to_restart
-            log("Time to restart a worker: Calling #stop_with_wait for worker #{w.inspect}")
-            w.stop_with_wait
-            log("Worker has been stopped: #{w.inspect}")
-            w.start!
-            log("Worker has been restarted: #{w.inspect}")
-            w = nil
-            restart_after_counter = @restart_after
-          end
+          interrupted_handler
+          sigchld_handler
+          restart_worker_if_needed
+          sleep LOOP_SLEEP_SECONDS
         end
       else
         loop do
-          stop! if @interrupted
-          sleep 1
+          interrupted_handler
+          sigchld_handler
+          sleep LOOP_SLEEP_SECONDS
         end
       end
     end
@@ -142,5 +119,44 @@ module Angael
       workers[@next_worker_to_restart_index]
     end
 
+
+    def sigchld_handler
+      if @sigchld
+        workers.each do |w|
+          result = exit_status(w.pid)
+          if result
+            # worker terminated
+            # Restart it unless we asked it to stop.
+            w.restart! unless w.stopping?
+          end
+        end
+        @sigchld = false
+      end
+    end
+
+    def interrupted_handler
+      stop! if @interrupted
+    end
+
+
+    # Periodically restart workers, 1 at a time.
+    def restart_worker_if_needed
+      @seconds_until_restart_next_worker ||= @restart_after
+
+      if @seconds_until_restart_next_worker > 0
+        @seconds_until_restart_next_worker -= LOOP_SLEEP_SECONDS
+      else
+        w = next_worker_to_restart
+        log("Time to restart a worker: Calling #stop_with_wait for worker #{w.inspect}")
+        w.stop_with_wait
+        log("Worker has been stopped: #{w.inspect}")
+        w.start!
+        log("Worker has been restarted: #{w.inspect}")
+        w = nil
+
+        # Reset the counter
+        @seconds_until_restart_next_worker = @restart_after
+      end
+    end
   end
 end
