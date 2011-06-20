@@ -8,7 +8,11 @@ module Angael
     # current process (i.e. an Errno::EPERM error is raised), then this method
     # returns an array with the pid as the first element and nil as the 2nd
     # element (because there is no Process::Status object to return).
+    # If the argument is nil, then it returns [nil, nil] because there can't be
+    # a process running with the pid nil.
     def exit_status(pid)
+      return [nil, nil] if pid.nil?
+
       # Sometimes wait2 returns nil even when the process has exited. This
       # raises an Errno::ESRCH error in that case.
       raise "Unexpected return value from Process.kill(0, pid)" unless Process.kill(0, pid) == 1

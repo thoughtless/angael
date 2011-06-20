@@ -4,6 +4,12 @@ describe Angael::ProcessHelper do
   include Angael::ProcessHelper
 
   describe "exit_status" do
+    context "when passed the argument nil" do
+      it "should return an array of [nil, nil]" do
+        exit_status(nil).should == [nil, nil]
+      end
+    end
+
     context "when Process.kill raises Errno::ESRCH" do
       before { Process.stub(:kill) { raise Errno::ESRCH } }
       it "should return an array of [pid, nil]" do
