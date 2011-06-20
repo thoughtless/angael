@@ -1,4 +1,5 @@
 require 'angael/process_helper'
+require 'logger'
 module Angael
   # A Manager has a number of of worker objects. Starting the Manager simply
   # calls #start! on each worker, then it goes into an infinite loop, waiting
@@ -21,13 +22,6 @@ module Angael
     # @opts [Hash] Additional options:
     #   :logger => A logger object, which should follow the Logger class in the
     #     standard library. Default nil, as in no logging.
-    #   :log_level => The log level, as defined by the Logger class in the
-    #     standard library. One of:
-    #       Logger::FATAL
-    #       Logger::ERROR
-    #       Logger::WARN
-    #       Logger::INFO  # Default
-    #       Logger::DEBUG
     #   :restart_after => If set, 1 worker will be restarted after this number
     #     of seconds. If it is nil (the default), then workers will not get
     #     restarted for no reason. If your workers leak memory, this can help
@@ -39,12 +33,6 @@ module Angael
       # TODO: Add a spec for this
       raise ArgumentError, ':restart_after must be either an Integer greater than zero or nil' if @restart_after && (@restart_after.to_i != @restart_after || @restart_after == 0)
       @logger = opts[:logger]
-      if @logger
-        @log_level = opts[:log_level] || begin
-          require 'logger' # Only require it if it is absolutely neccessary.
-          Logger::INFO
-        end
-      end
     end
 
 
@@ -54,15 +42,15 @@ module Angael
       workers.each { |w| w.start! }
 
       trap("CHLD") do
-        log("SIGCHLD Received")
+        debug("SIGCHLD Received")
         @sigchld = true
       end
       trap("INT") do
-        log("SIGINT Received")
+        info("SIGINT Received")
         @interrupted = true
       end
       trap("TERM") do
-        log("SIGTERM Received")
+        info("SIGTERM Received")
         @interrupted = true
       end
 
@@ -89,24 +77,33 @@ module Angael
     #########
 
     def stop!
-      log("Attempting to gracefully stopping worker manager")
+      info("Attempting to gracefully stopping worker manager")
       # Tell each worker to stop, without waiting to see if it worked.
       workers.each { |w|
-        log("Calling #stop_without_wait for worker #{w.inspect}")
+        debug("Calling #stop_without_wait for worker #{w.inspect}")
         w.stop_without_wait
-        log("Finished call to #stop_without_wait for worker #{w.inspect}")
+        debug("Finished call to #stop_without_wait for worker #{w.inspect}")
       }
       # Wait for each worker to stop, one at a time.
       workers.each { |w|
-        log("Calling #stop_with_wait for worker #{w.inspect}")
+        debug("Calling #stop_with_wait for worker #{w.inspect}")
         w.stop_with_wait
-        log("Finished call to #stop_with_wait for worker #{w.inspect}")
+        debug("Finished call to #stop_with_wait for worker #{w.inspect}")
       }
+      info("Exiting")
       exit 0
     end
 
-    def log(msg)
-      @logger.add(@log_level, "#{Time.now.utc} - #{self.class} (pid #{$$}): #{msg}") if @logger
+    def log(level, msg)
+      @logger.add(level, "#{Time.now.utc} - #{self.class} (pid #{$$}): #{msg}") if @logger
+    end
+
+    def debug(msg)
+      log(Logger::DEBUG, msg)
+    end
+
+    def info(msg)
+      log(Logger::INFO, msg)
     end
 
 
@@ -147,11 +144,11 @@ module Angael
         @seconds_until_restart_next_worker -= LOOP_SLEEP_SECONDS
       else
         w = next_worker_to_restart
-        log("Time to restart a worker: Calling #stop_with_wait for worker #{w.inspect}")
+        debug("Time to restart a worker: Calling #stop_with_wait for worker #{w.inspect}")
         w.stop_with_wait
-        log("Worker has been stopped: #{w.inspect}")
+        debug("Worker has been stopped: #{w.inspect}")
         w.start!
-        log("Worker has been restarted: #{w.inspect}")
+        debug("Worker has been restarted: #{w.inspect}")
         w = nil
 
         # Reset the counter

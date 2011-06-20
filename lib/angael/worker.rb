@@ -1,4 +1,5 @@
 require 'angael/process_helper'
+require 'logger'
 module Angael
   # Usage
   #     include Angael::Worker
@@ -28,27 +29,27 @@ module Angael
       @stopping = false
 
       @pid = fork_child do
-        __log("Started")
+        __info("Started")
 
         if respond_to?(:after_fork)
-          __log("Running after fork callback")
+          __debug("Running after fork callback")
           after_fork
-          __log("Finished running after fork callback")
+          __debug("Finished running after fork callback")
         end
 
         @interrupted = false
         trap("INT") do
-          __log("SIGINT Received")
+          __info("SIGINT Received")
           @interrupted = true
         end
         trap("TERM") do
-          __log("SIGTERM Received")
+          __info("SIGTERM Received")
           @interrupted = true
         end
 
         loop do
           if @interrupted
-            __log("Child process exiting gracefully")
+            __info("Child process exiting gracefully")
             exit 0
           end
           work
@@ -71,7 +72,7 @@ module Angael
     # Sets stopping? to false.
     def stop_without_wait
       unless started?
-        __log("Tried to stop worker with PID #{pid} but it is not started")
+        __warn("Tried to stop worker with PID #{pid} but it is not started")
         return false
       end
 
@@ -79,7 +80,7 @@ module Angael
       # stopped the child process.
       @stopping = true
 
-      __log("Sending SIGINT to child process with pid #{pid}.")
+      __debug("Sending SIGINT to child process with pid #{pid}.")
       send_signal('INT', pid)
       true
     end
@@ -89,19 +90,19 @@ module Angael
     def stop_with_wait
       return false unless stop_without_wait
 
-      __log("Waiting for child process with pid #{pid} to stop.")
+      __debug("Waiting for child process with pid #{pid} to stop.")
 
       counter = 0
 
       while pid_running? && counter < timeout
         sleep 1
         counter += 1
-        __log("Sending SIGINT to child process with pid #{pid}. Attempt Count: #{counter}.")
+        __info("Sending SIGINT to child process with pid #{pid}. Attempt Count: #{counter}.")
         send_signal('INT', pid)
       end
 
       if pid_running?
-        __log("Child process with pid #{pid} did not stop within #{timeout} seconds of SIGINT. Sending SIGKILL to child process.")
+        __warn("Child process with pid #{pid} did not stop within #{timeout} seconds of SIGINT. Sending SIGKILL to child process.")
         send_signal('KILL', pid)
         sleep 1
       end
@@ -109,7 +110,7 @@ module Angael
       if pid_running?
         # SIGKILL didn't work.
         msg = "Unable to kill child process with PID: #{pid}"
-        __log(msg)
+        __error(msg)
         raise ChildProcessNotStoppedError, msg
       end
     end
@@ -136,10 +137,21 @@ module Angael
     end
 
 
-    def __log(msg)
-      log(msg) if respond_to?(:log)
+    def __log(level, msg)
+      log(level, msg) if respond_to?(:log)
     end
-
+    def __debug(msg)
+      __log(Logger::DEBUG, msg)
+    end
+    def __info(msg)
+      __log(Logger::INFO, msg)
+    end
+    def __warn(msg)
+      __log(Logger::WARN, msg)
+    end
+    def __error(msg)
+      __log(Logger::ERROR, msg)
+    end
 
     # In seconds
     def timeout
