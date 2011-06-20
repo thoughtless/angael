@@ -53,36 +53,12 @@ describe Angael::Manager do
         end
 
         subject.workers[0].should_receive_in_child_process(:stop_with_wait).exactly(1).times
-        subject.workers[1].should_receive_in_child_process(:stop_with_wait).at_least(:once)#.exactly(2).times # This is the worker that got restarted.
+        subject.workers[1].should_receive_in_child_process(:stop_with_wait).exactly(2).times # This is the worker that got restarted.
         subject.workers[2].should_receive_in_child_process(:stop_with_wait).exactly(1).times
 
         subject.workers[0].should_receive_in_child_process(:start!).exactly(1).times
-        subject.workers[1].should_receive_in_child_process(:start!).at_least(:once)#.exactly(2).times # This is the worker that got restarted.
+        subject.workers[1].should_receive_in_child_process(:start!).exactly(2).times # This is the worker that got restarted.
         subject.workers[2].should_receive_in_child_process(:start!).exactly(1).times
-
-
-        # As an alternative to should_receive_in_child_process, we
-        # fork a process which will send SIGINT to this current process.
-        # Then we start the Manager in this process and wait for it to
-        # get the SIGINT. Finally we rescue SystemExit so that this
-        # process doesn't exit with the Manager stops.
-        # TODO: Be consistent in my use of this technique vs. should_receive_in_child_process.
-#        current_pid = $$
-#        @pid = Process.fork do
-#          sleep 5#0.6 # Add a 0.1 second buffer to the value of :restart_after to give the process a chance to start.
-#          Process.kill('INT', current_pid)
-#          exit 0
-#        end
-#        begin
-#          puts "about to call subject.start!"
-#          subject.start!
-#          puts "call to subject.start! just finished"
-#        rescue SystemExit
-#          nil
-#        end
-#
-#        sleep 5
-
 
         @pid = Process.fork do
           subject.start!
@@ -100,50 +76,50 @@ describe Angael::Manager do
       end
 
       context "when worker was asked to stop" do
-#        it "should not restart the child process" do
-#          subject.workers.each do |w|
-#            w.stub(:work).and_return { sleep 0.1 }
-#            w.should_receive_in_child_process(:restart!).exactly(0).times
-#          end
-#
-#          @pid = Process.fork do
-#            subject.start!
-#          end
-#
-#          sleep 0.1 # Give the process a chance to start.
-#          # This sends stop_with_wait to all the workers.
-#          Process.kill('INT', @pid)
-#          sleep 0.1 # Give the TempFile a chance to flush
-#        end
-#
-#        it "should reap the child processes" do
-#          subject.workers.each do |w|
-#            w.stub(:work).and_return { sleep 0.05 }
-#          end
-#
-#          # We need access to the worker objects to get their PIDs, so we
-#          # fork a process which will send SIGINT to this current process.
-#          # Then we start the Manager in this process and wait for it to
-#          # get the SIGINT. Finally we rescue SystemExit so that this
-#          # process doesn't exit with the Manager stops.
-#          current_pid = $$
-#          @pid = Process.fork do
-#            sleep 0.1 # Give the process a chance to start.
-#            Process.kill('INT', current_pid)
-#            exit 0
-#          end
-#          begin
-#            subject.start!
-#          rescue SystemExit
-#            nil
-#          end
-#
-#          subject.workers.each do |w|
-#            lambda do
-#              Process.kill(0, w.pid)
-#            end.should raise_error(Errno::ESRCH, "No such process")
-#          end
-#        end
+        it "should not restart the child process" do
+          subject.workers.each do |w|
+            w.stub(:work).and_return { sleep 0.1 }
+            w.should_receive_in_child_process(:restart!).exactly(0).times
+          end
+
+          @pid = Process.fork do
+            subject.start!
+          end
+
+          sleep 0.1 # Give the process a chance to start.
+          # This sends stop_with_wait to all the workers.
+          Process.kill('INT', @pid)
+          sleep 0.1 # Give the TempFile a chance to flush
+        end
+
+        it "should reap the child processes" do
+          subject.workers.each do |w|
+            w.stub(:work).and_return { sleep 0.05 }
+          end
+
+          # We need access to the worker objects to get their PIDs, so we
+          # fork a process which will send SIGINT to this current process.
+          # Then we start the Manager in this process and wait for it to
+          # get the SIGINT. Finally we rescue SystemExit so that this
+          # process doesn't exit with the Manager stops.
+          current_pid = $$
+          @pid = Process.fork do
+            sleep 0.1 # Give the process a chance to start.
+            Process.kill('INT', current_pid)
+            exit 0
+          end
+          begin
+            subject.start!
+          rescue SystemExit
+            nil
+          end
+
+          subject.workers.each do |w|
+            lambda do
+              Process.kill(0, w.pid)
+            end.should raise_error(Errno::ESRCH, "No such process")
+          end
+        end
       end
 
       context "when worker was not asked to stop" do
@@ -152,63 +128,63 @@ describe Angael::Manager do
           Process.kill('INT', @pid)
           sleep 0.1
         end
-#        it "should restart the child process" do
-#          subject.workers.each do |w|
-#            w.stub(:work).and_return do
-#              sleep 0.05
-#              # This is like exiting with an exception, but it prevents the ugly
-#              # stacktrace.
-#              exit 1
-#            end
-#            w.should_receive_in_child_process(:restart!).at_least(1).times
-#          end
-#
-#          @pid = Process.fork do
-#            subject.start!
-#          end
-#
-#          sleep 0.1 # Give the process a chance to start.
-#        end
+        it "should restart the child process" do
+          subject.workers.each do |w|
+            w.stub(:work).and_return do
+              sleep 0.05
+              # This is like exiting with an exception, but it prevents the ugly
+              # stacktrace.
+              exit 1
+            end
+            w.should_receive_in_child_process(:restart!).at_least(1).times
+          end
+
+          @pid = Process.fork do
+            subject.start!
+          end
+
+          sleep 0.1 # Give the process a chance to start.
+        end
       end
     end
 
     %w(INT TERM).each do |sig|
       context "when it receives a SIG#{sig}" do
-#        it "should call #stop_without_wait on each Worker" do
-#          subject.workers.each do |w|
-#            w.stub(:start!) # We don't care about the sub-process, so don't start it.
-#
-#            w.should_receive_in_child_process(:stop_without_wait).at_least(1).times
-#          end
-#
-#          pid = Process.fork do
-#            subject.start!
-#          end
-#          sleep 0.1 # Give the process a chance to start.
-#          Process.kill(sig, pid)
-#          sleep 0.1 # Give the TempFile a chance to flush
-#
-#          # Clean up
-#          Process.wait(pid)
-#        end
-#
-#        it "should call #stop_with_wait on each Worker" do
-#          subject.workers.each do |w|
-#            w.stub(:start!) # We don't care about the sub-process, so don't start it.
-#
-#            w.should_receive_in_child_process(:stop_with_wait)
-#          end
-#
-#          pid = Process.fork do
-#            subject.start!
-#          end
-#          sleep 0.1 # Give the process a chance to start.
-#          Process.kill(sig, pid)
-#          sleep 0.1 # Give the TempFile a chance to flush
-#
-#          # Clean up
-#          Process.wait(pid)
-#        end
+        it "should call #stop_without_wait on each Worker" do
+          subject.workers.each do |w|
+            w.stub(:start!) # We don't care about the sub-process, so don't start it.
+
+            w.should_receive_in_child_process(:stop_without_wait).at_least(1).times
+          end
+
+          pid = Process.fork do
+            subject.start!
+          end
+          sleep 0.1 # Give the process a chance to start.
+          Process.kill(sig, pid)
+          sleep 0.1 # Give the TempFile a chance to flush
+
+          # Clean up
+          Process.wait(pid)
+        end
+
+        it "should call #stop_with_wait on each Worker" do
+          subject.workers.each do |w|
+            w.stub(:start!) # We don't care about the sub-process, so don't start it.
+
+            w.should_receive_in_child_process(:stop_with_wait)
+          end
+
+          pid = Process.fork do
+            subject.start!
+          end
+          sleep 0.1 # Give the process a chance to start.
+          Process.kill(sig, pid)
+          sleep 0.1 # Give the TempFile a chance to flush
+
+          # Clean up
+          Process.wait(pid)
+        end
       end
     end
   end
