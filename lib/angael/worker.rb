@@ -7,16 +7,17 @@ module Angael
   #       # Do something interesting, without raising an exception.
   #     end
   # You can also add some optional behavior by defining the following methods:
-  #    #after_fork - This is run once, immediately after the child process is forked
-  #    #fork_child - This actually does the forking. You can overwrite this method
-  #                  to do wrap the child process in a block. This is useful for
-  #                  exception handling. Be sure to actually fork or you may break
-  #                  something important.
-  #    #log        - If defined, this will be called at various points of interest
-  #                  with 1 String as the argument. Log levels are not supported.
-  #    #timeout    - Number of seconds to wait for the child process to exit after
-  #                  it is sent SIGINT. If you don't define this method, it waits
-  #                  60 seconds.
+  #    #after_fork  - This is run once, immediately after the child process is forked
+  #    #before_exit - This is run once, immediately before the child process exits
+  #    #fork_child  - This actually does the forking. You can overwrite this method
+  #                   to do wrap the child process in a block. This is useful for
+  #                   exception handling. Be sure to actually fork or you may break
+  #                   something important.
+  #    #log         - If defined, this will be called at various points of interest
+  #                   with 1 String as the argument. Log levels are not supported.
+  #    #timeout     - Number of seconds to wait for the child process to exit after
+  #                   it is sent SIGINT. If you don't define this method, it waits
+  #                   60 seconds.
   module Worker
     include ProcessHelper
     class ChildProcessNotStoppedError < StandardError; end
@@ -49,6 +50,12 @@ module Angael
 
         loop do
           if @interrupted
+            if respond_to?(:before_exit)
+              __debug("Running before exit callback")
+              before_exit
+              __debug("Finished running before exit callback")
+            end
+
             __info("Child process exiting gracefully")
             exit 0
           end
