@@ -59,12 +59,14 @@ module Angael
           interrupted_handler
           sigchld_handler
           restart_worker_if_needed
+          flush_logger
           sleep LOOP_SLEEP_SECONDS
         end
       else
         loop do
           interrupted_handler
           sigchld_handler
+          flush_logger
           sleep LOOP_SLEEP_SECONDS
         end
       end
@@ -154,6 +156,10 @@ module Angael
         # Reset the counter
         @seconds_until_restart_next_worker = @restart_after
       end
+    end
+
+    def flush_logger
+      @logger.flush if @logger && @logger.respond_to?(:flush)
     end
   end
 end
