@@ -85,7 +85,51 @@ describe Angael::Worker do
 
 
 
-  describe "#stop_with_wait!" do
+  describe "#stop_without_wait" do
+    before { subject.stub(:work => nil) }
+    after { subject.stop_with_wait }
+
+    context "when stopped" do
+      it "should return false" do
+        subject.should_not be_started
+        subject.stop_without_wait.should be_false
+      end
+
+      it "should not be stopping" do
+        subject.stop_without_wait
+        subject.should_not be_stopping
+      end
+
+      it "should not send a SIGINT to the child process" do
+        should_not_receive_and_run(Process, :kill, 'INT', subject.pid)
+        subject.stop_without_wait
+      end
+
+      it "should return false" do
+        subject.stop_without_wait.should be_false
+      end
+    end
+
+    context "when started" do
+      before { subject.start! }
+      it "should send a SIGINT to the child process" do
+        should_receive_and_run(Process, :kill, 'INT', subject.pid)
+        subject.stop_without_wait
+      end
+
+      it "should be stopping" do
+        subject.stop_without_wait
+        subject.should be_stopping
+      end
+
+      it "should return true" do
+        subject.stop_without_wait.should be_true
+      end
+    end
+  end
+
+
+  describe "#stop_with_wait" do
     before { subject.stub(:work => nil) }
     after { subject.stop_with_wait }
 
