@@ -35,6 +35,8 @@ module Angael
       @workers = []
       worker_count.times { workers << worker_class.new(*worker_args) }
       @restart_after = opts[:restart_after]
+      # TODO: Add a spec for this
+      raise ArgumentError, ':restart_after must be either an Integer greater than zero or nil' if @restart_after && (@restart_after.to_i != @restart_after || @restart_after == 0)
       @logger = opts[:logger]
       if @logger
         @log_level = opts[:log_level] || begin
@@ -64,28 +66,40 @@ module Angael
         end
       end
       trap("INT") do
-        stop!
+        log("SIGINT Received")
+        @interrupted = true
       end
       trap("TERM") do
-        stop!
+        log("SIGTERM Received")
+        @interrupted = true
       end
 
       if @restart_after
+        restart_after_counter = @restart_after
         loop do
-          # Periodically restart workers, 1 at a time.
-          log("Sleeping for #@restart_after seconds")
-          sleep @restart_after
-          w = next_worker_to_restart
-          log("Time to restart a worker: Calling #stop_with_wait for worker #{w.inspect}")
-          w.stop_with_wait
-          log("Worker has been stopped: #{w.inspect}")
-          w.start!
-          log("Worker has been restarted: #{w.inspect}")
-          w = nil
+          stop! if @interrupted
+
+          # This ensures we are checking @interrupted every 1 second, but we
+          # can set @restart_after to something greater than zero.
+          if restart_after_counter > 0
+            sleep 1
+            restart_after_counter -= 1
+          else
+            # Periodically restart workers, 1 at a time.
+            log("Sleeping for #@restart_after seconds")
+            w = next_worker_to_restart
+            log("Time to restart a worker: Calling #stop_with_wait for worker #{w.inspect}")
+            w.stop_with_wait
+            log("Worker has been stopped: #{w.inspect}")
+            w.start!
+            log("Worker has been restarted: #{w.inspect}")
+            w = nil
+            restart_after_counter = @restart_after
+          end
         end
       else
         loop do
-          # Don't restart workers if nothing is wrong.
+          stop! if @interrupted
           sleep 1
         end
       end
@@ -98,7 +112,7 @@ module Angael
     #########
 
     def stop!
-      log("SIGINT Received")
+      log("Attempting to gracefully stopping worker manager")
       # Tell each worker to stop, without waiting to see if it worked.
       workers.each { |w|
         log("Calling #stop_without_wait for worker #{w.inspect}")

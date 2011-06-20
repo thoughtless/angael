@@ -44,9 +44,9 @@ describe Angael::Manager do
         clean_up_pid(@pid)
       end
 
-      subject { Angael::Manager.new(Angael::TestSupport::SampleWorker, 3, [], :restart_after => 0.5) }
+      subject { Angael::Manager.new(Angael::TestSupport::SampleWorker, 3, [], :restart_after => 1) }
 
-      it "should restart workers 1 at a time, at 0.5 second intervals" do
+      it "should restart workers 1 at a time, at 1 second intervals" do
         subject.workers.each do |w|
           # This isn't used for restarts.
           w.stub(:stop_without_wait)
@@ -64,7 +64,7 @@ describe Angael::Manager do
           subject.start!
         end
 
-        sleep 0.6 # Add a 0.1 second buffer to the value of :restart_after to give the process a chance to start.
+        sleep 1.1 # Add a 0.1 second buffer to the value of :restart_after to give the process a chance to start.
         Process.kill('INT', @pid)
 
       end
